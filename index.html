@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Pesquise plugins do SpigotMC e copie o Resource ID para Spiget / Minepanel." />
+  <title>Spiget ID Search</title>
+  <link rel="preconnect" href="https://api.spiget.org" />
+  <link rel="icon" href="logo.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      --bg: #0c0e12;
+      --surface: #141820;
+      --surface-2: #1a1f2a;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #eef1f6;
+      --muted: #8b93a7;
+      --accent: #5b8def;
+      --accent-soft: rgba(91, 141, 239, 0.15);
+      --ok: #3dd68c;
+      --radius: 14px;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      min-height: 100dvh;
+      font-family: var(--font);
+      background:
+        radial-gradient(1200px 600px at 50% -10%, rgba(91, 141, 239, 0.12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding: 24px 16px 48px;
+    }
+
+    .wrap {
+      width: min(640px, 100%);
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+      padding-top: 12px;
+    }
+
+    .logo {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 14px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(145deg, var(--surface-2), var(--surface));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .logo img {
+      width: 44px;
+      height: 44px;
+    }
+
+    h1 {
+      font-size: 1.45rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .search-box {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .search-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+    }
+
+    .search-row svg {
+      flex-shrink: 0;
+      opacity: 0.55;
+    }
+
+    #q {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 1.05rem;
+      font-family: inherit;
+    }
+
+    #q::placeholder { color: var(--muted); }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .spinner.on { opacity: 1; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hint {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-align: center;
+    }
+
+    #status {
+      margin-top: 16px;
+      min-height: 1.2em;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    #results {
+      list-style: none;
+      margin-top: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      align-items: center;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .card:hover, .card:focus-within {
+      border-color: rgba(91, 141, 239, 0.35);
+      background: var(--surface-2);
+    }
+
+    .name {
+      font-weight: 600;
+      font-size: 0.98rem;
+      word-break: break-word;
+    }
+
+    .meta {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .id-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 0;
+      cursor: pointer;
+      color: var(--accent);
+    }
+
+    .id-pill:hover { filter: brightness(1.1); }
+    .id-pill.copied { color: var(--ok); }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    a.link {
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    a.link:hover { color: var(--text); }
+
+    footer {
+      margin-top: 36px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    footer a { color: var(--muted); }
+
+    @media (min-width: 480px) {
+      .card {
+        grid-template-columns: 1fr auto auto;
+        align-items: center;
+      }
+      .meta { grid-column: auto; }
+      .actions { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">
+        <img src="logo.svg" alt="" width="44" height="44" />
+      </div>
+      <h1>Spiget ID Search</h1>
+      <p class="sub">Digite o nome do plugin e copie o Resource ID</p>
+    </header>
+
+    <div class="search-box" role="search">
+      <div class="search-row">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input id="q" type="search" autocomplete="off" spellcheck="false"
+               placeholder="Ex: LuckPerms, ViaVersion, Vault…"
+               enterkeyhint="search" />
+        <div class="spinner" id="spinner" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <p class="hint">Sugestões em tempo real via API Spiget · mínimo 2 caracteres</p>
+    <div id="status" role="status" aria-live="polite"></div>
+    <ul id="results"></ul>
+
+    <footer>
+      Dados de <a href="https://spiget.org" target="_blank" rel="noopener">Spiget</a>
+      · para uso com Minepanel / SPIGET_RESOURCES
+    </footer>
+  </div>
+
+  <script>
+    const API = "https://api.spiget.org/v2/search/resources/";
+    const UA = "SpigetIdSearch/1.1 (https://github.com/vini2191/spiget-id-search)";
+    const qEl = document.getElementById("q");
+    const resultsEl = document.getElementById("results");
+    const statusEl = document.getElementById("status");
+    const spinner = document.getElementById("spinner");
+
+    let debounceTimer = null;
+    let abortCtrl = null;
+    let requestSeq = 0;
+
+    function setLoading(on) {
+      spinner.classList.toggle("on", on);
+    }
+
+    function formatDownloads(n) {
+      if (n == null) return "—";
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+      if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "k";
+      return String(n);
+    }
+
+    async function copyId(id, btn) {
+      try {
+        await navigator.clipboard.writeText(String(id));
+        const prev = btn.textContent;
+        btn.textContent = id + " ✓";
+        btn.classList.add("copied");
+        setTimeout(() => {
+          btn.textContent = prev.replace(" ✓", "");
+          btn.classList.remove("copied");
+        }, 1200);
+      } catch {
+        prompt("Copie o ID:", String(id));
+      }
+    }
+
+    function render(items) {
+      resultsEl.innerHTML = "";
+      for (const r of items) {
+        const li = document.createElement("li");
+        li.className = "card";
+
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = r.name || "Sem nome";
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.innerHTML =
+          `<span>${formatDownloads(r.downloads)} downloads</span>` +
+          (r.tag ? `<span>${escapeHtml(r.tag)}</span>` : "");
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+
+        const idBtn = document.createElement("button");
+        idBtn.type = "button";
+        idBtn.className = "id-pill";
+        idBtn.title = "Copiar ID";
+        idBtn.textContent = String(r.id);
+        idBtn.addEventListener("click", () => copyId(r.id, idBtn));
+
+        const link = document.createElement("a");
+        link.className = "link";
+        link.href = `https://www.spigotmc.org/resources/${r.id}/`;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = "Spigot ↗";
+
+        actions.append(idBtn, link);
+        li.append(name, meta, actions);
+        resultsEl.appendChild(li);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function search(query) {
+      const q = query.trim();
+      if (q.length < 2) {
+        if (abortCtrl) abortCtrl.abort();
+        setLoading(false);
+        resultsEl.innerHTML = "";
+        statusEl.textContent = q ? "Continue digitando…" : "";
+        return;
+      }
+
+      if (abortCtrl) abortCtrl.abort();
+      abortCtrl = new AbortController();
+      const seq = ++requestSeq;
+      setLoading(true);
+      statusEl.textContent = "A pesquisar…";
+
+      const url =
+        API +
+        encodeURIComponent(q) +
+        "?field=name&size=12&sort=-downloads&fields=id,name,tag,downloads";
+
+      try {
+        const res = await fetch(url, {
+          signal: abortCtrl.signal,
+          headers: { "User-Agent": UA },
+        });
+        if (seq !== requestSeq) return;
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        if (seq !== requestSeq) return;
+
+        if (!Array.isArray(data) || data.length === 0) {
+          resultsEl.innerHTML = "";
+          statusEl.textContent = "Nenhum resultado";
+        } else {
+          render(data);
+          statusEl.textContent = data.length + " resultado" + (data.length === 1 ? "" : "s");
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        if (seq !== requestSeq) return;
+        resultsEl.innerHTML = "";
+        statusEl.textContent = "Erro na pesquisa. Tente de novo.";
+        console.error(err);
+      } finally {
+        if (seq === requestSeq) setLoading(false);
+      }
+    }
+
+    qEl.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => search(qEl.value), 280);
+    });
+
+    qEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        clearTimeout(debounceTimer);
+        search(qEl.value);
+      }
+    });
+
+    qEl.focus();
+  </script>
+</body>
+</html>
