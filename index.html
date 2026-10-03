@@ -64,6 +64,7 @@
     .logo img {
       width: 44px;
       height: 44px;
+      display: block;
     }
 
     h1 {
@@ -79,12 +80,10 @@
     }
 
     .search-box {
-      position: relative;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow: hidden;
     }
 
     .search-row {
@@ -121,6 +120,7 @@
       animation: spin 0.7s linear infinite;
       opacity: 0;
       transition: opacity 0.15s;
+      flex-shrink: 0;
     }
 
     .spinner.on { opacity: 1; }
@@ -145,15 +145,15 @@
     #results {
       list-style: none;
       margin-top: 16px;
-      display: grid;
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
 
     .card {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px 12px;
-      align-items: center;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
       padding: 14px 16px;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -166,27 +166,47 @@
       background: var(--surface-2);
     }
 
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
     .name {
+      flex: 1;
+      min-width: 0;
       font-weight: 600;
-      font-size: 0.98rem;
-      word-break: break-word;
+      font-size: 1rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .actions {
+      display: flex;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 8px;
     }
 
     .meta {
-      grid-column: 1 / -1;
       display: flex;
       flex-wrap: wrap;
-      gap: 8px 12px;
+      gap: 6px 12px;
       color: var(--muted);
       font-size: 0.8rem;
+      line-height: 1.4;
+    }
+
+    .meta .tag {
+      max-width: 100%;
     }
 
     .id-pill {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-family: ui-monospace, "Cascadia Code", monospace;
-      font-size: 0.9rem;
+      font-family: ui-monospace, "Cascadia Code", "SF Mono", monospace;
+      font-size: 0.88rem;
       font-weight: 600;
       color: var(--accent);
       background: var(--accent-soft);
@@ -194,17 +214,11 @@
       border-radius: 8px;
       border: 0;
       cursor: pointer;
-      color: var(--accent);
+      white-space: nowrap;
     }
 
-    .id-pill:hover { filter: brightness(1.1); }
+    .id-pill:hover { filter: brightness(1.12); }
     .id-pill.copied { color: var(--ok); }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
 
     a.link {
       color: var(--muted);
@@ -223,15 +237,6 @@
     }
 
     footer a { color: var(--muted); }
-
-    @media (min-width: 480px) {
-      .card {
-        grid-template-columns: 1fr auto auto;
-        align-items: center;
-      }
-      .meta { grid-column: auto; }
-      .actions { grid-column: auto; }
-    }
   </style>
 </head>
 <body>
@@ -250,13 +255,13 @@
           <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
         </svg>
         <input id="q" type="search" autocomplete="off" spellcheck="false"
-               placeholder="Ex: LuckPerms, ViaVersion, Vault…"
+               placeholder="Ex: LuckPerms, via version, Vault…"
                enterkeyhint="search" />
         <div class="spinner" id="spinner" aria-hidden="true"></div>
       </div>
     </div>
 
-    <p class="hint">Sugestões em tempo real via API Spiget · mínimo 2 caracteres</p>
+    <p class="hint">Sugestões em tempo real · tolera espaços e erros leves de digitação</p>
     <div id="status" role="status" aria-live="polite"></div>
     <ul id="results"></ul>
 
@@ -268,7 +273,7 @@
 
   <script>
     const API = "https://api.spiget.org/v2/search/resources/";
-    const UA = "SpigetIdSearch/1.1 (https://github.com/vini2191/spiget-id-search)";
+    const UA = "SpigetIdSearch/1.2 (https://github.com/vini2191/spiget-id-search)";
     const qEl = document.getElementById("q");
     const resultsEl = document.getElementById("results");
     const statusEl = document.getElementById("status");
@@ -289,18 +294,67 @@
       return String(n);
     }
 
+    function normalize(s) {
+      return String(s || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "");
+    }
+
+    /** Distância de Levenshtein limitada (rápida para nomes curtos). */
+    function levenshtein(a, b, max = 4) {
+      if (a === b) return 0;
+      if (!a.length) return b.length;
+      if (!b.length) return a.length;
+      if (Math.abs(a.length - b.length) > max) return max + 1;
+      const prev = new Array(b.length + 1);
+      const cur = new Array(b.length + 1);
+      for (let j = 0; j <= b.length; j++) prev[j] = j;
+      for (let i = 1; i <= a.length; i++) {
+        cur[0] = i;
+        let rowMin = cur[0];
+        for (let j = 1; j <= b.length; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+          if (cur[j] < rowMin) rowMin = cur[j];
+        }
+        if (rowMin > max) return max + 1;
+        for (let j = 0; j <= b.length; j++) prev[j] = cur[j];
+      }
+      return prev[b.length];
+    }
+
+    function scoreMatch(queryNorm, name) {
+      const n = normalize(name);
+      if (!queryNorm || !n) return 99;
+      if (n === queryNorm) return 0;
+      if (n.startsWith(queryNorm)) return 1;
+      if (n.includes(queryNorm)) return 2;
+      // subseqüência (v-i-a-v-e-r-s-i-o-n cobre "viaversian" parcialmente)
+      let qi = 0;
+      for (let i = 0; i < n.length && qi < queryNorm.length; i++) {
+        if (n[i] === queryNorm[qi]) qi++;
+      }
+      if (qi === queryNorm.length) return 3;
+      const d = levenshtein(queryNorm, n, 4);
+      if (d <= 2) return 3 + d;
+      if (d <= 4 && n.length > 4) return 6 + d;
+      return 50 + d;
+    }
+
     async function copyId(id, btn) {
+      const label = String(id);
       try {
-        await navigator.clipboard.writeText(String(id));
-        const prev = btn.textContent;
-        btn.textContent = id + " ✓";
+        await navigator.clipboard.writeText(label);
+        btn.textContent = label + " ✓";
         btn.classList.add("copied");
         setTimeout(() => {
-          btn.textContent = prev.replace(" ✓", "");
+          btn.textContent = label;
           btn.classList.remove("copied");
         }, 1200);
       } catch {
-        prompt("Copie o ID:", String(id));
+        prompt("Copie o ID:", label);
       }
     }
 
@@ -310,15 +364,12 @@
         const li = document.createElement("li");
         li.className = "card";
 
+        const top = document.createElement("div");
+        top.className = "card-top";
+
         const name = document.createElement("div");
         name.className = "name";
         name.textContent = r.name || "Sem nome";
-
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.innerHTML =
-          `<span>${formatDownloads(r.downloads)} downloads</span>` +
-          (r.tag ? `<span>${escapeHtml(r.tag)}</span>` : "");
 
         const actions = document.createElement("div");
         actions.className = "actions";
@@ -338,56 +389,110 @@
         link.textContent = "Spigot ↗";
 
         actions.append(idBtn, link);
-        li.append(name, meta, actions);
+        top.append(name, actions);
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        const dl = document.createElement("span");
+        dl.textContent = formatDownloads(r.downloads) + " downloads";
+        meta.appendChild(dl);
+        if (r.tag) {
+          const tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = r.tag;
+          meta.appendChild(tag);
+        }
+
+        li.append(top, meta);
         resultsEl.appendChild(li);
       }
     }
 
-    function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    async function fetchSearch(term, signal) {
+      const url =
+        API +
+        encodeURIComponent(term) +
+        "?field=name&size=15&sort=-downloads&fields=id,name,tag,downloads";
+      const res = await fetch(url, {
+        signal,
+        headers: { "User-Agent": UA },
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+
+    /** Gera variantes da query para a API (espaços, trechos). */
+    function queryVariants(raw) {
+      const trimmed = raw.trim().replace(/\s+/g, " ");
+      const noSpace = trimmed.replace(/\s+/g, "");
+      const words = trimmed.split(" ").filter(Boolean);
+      const set = new Set();
+      if (trimmed) set.add(trimmed);
+      if (noSpace && noSpace !== trimmed) set.add(noSpace);
+      // primeira palavra (ex: "via" de "via versian")
+      if (words.length >= 1 && words[0].length >= 2) set.add(words[0]);
+      // primeiras duas coladas
+      if (words.length >= 2) set.add(words[0] + words[1]);
+      return [...set];
     }
 
     async function search(query) {
-      const q = query.trim();
-      if (q.length < 2) {
+      const raw = query.trim();
+      if (raw.length < 2) {
         if (abortCtrl) abortCtrl.abort();
         setLoading(false);
         resultsEl.innerHTML = "";
-        statusEl.textContent = q ? "Continue digitando…" : "";
+        statusEl.textContent = raw ? "Continue digitando…" : "";
         return;
       }
 
       if (abortCtrl) abortCtrl.abort();
       abortCtrl = new AbortController();
+      const { signal } = abortCtrl;
       const seq = ++requestSeq;
       setLoading(true);
       statusEl.textContent = "A pesquisar…";
 
-      const url =
-        API +
-        encodeURIComponent(q) +
-        "?field=name&size=12&sort=-downloads&fields=id,name,tag,downloads";
+      const variants = queryVariants(raw);
+      const queryNorm = normalize(raw);
 
       try {
-        const res = await fetch(url, {
-          signal: abortCtrl.signal,
-          headers: { "User-Agent": UA },
-        });
-        if (seq !== requestSeq) return;
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const data = await res.json();
+        const batches = await Promise.all(
+          variants.map((v) => fetchSearch(v, signal).catch(() => []))
+        );
         if (seq !== requestSeq) return;
 
-        if (!Array.isArray(data) || data.length === 0) {
+        const byId = new Map();
+        for (const batch of batches) {
+          for (const r of batch) {
+            if (r && r.id != null && !byId.has(r.id)) byId.set(r.id, r);
+          }
+        }
+
+        let items = [...byId.values()];
+        items.sort((a, b) => {
+          const sa = scoreMatch(queryNorm, a.name);
+          const sb = scoreMatch(queryNorm, b.name);
+          if (sa !== sb) return sa - sb;
+          return (b.downloads || 0) - (a.downloads || 0);
+        });
+
+        // Filtra ruído muito irrelevante se houver bons matches
+        const best = items.length ? scoreMatch(queryNorm, items[0].name) : 99;
+        if (best <= 8) {
+          items = items.filter((r) => scoreMatch(queryNorm, r.name) <= 12);
+        }
+
+        items = items.slice(0, 12);
+
+        if (!items.length) {
           resultsEl.innerHTML = "";
           statusEl.textContent = "Nenhum resultado";
         } else {
-          render(data);
-          statusEl.textContent = data.length + " resultado" + (data.length === 1 ? "" : "s");
+          render(items);
+          statusEl.textContent =
+            items.length + " resultado" + (items.length === 1 ? "" : "s");
         }
       } catch (err) {
         if (err.name === "AbortError") return;
